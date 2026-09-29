@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          java-version: '21'
+          distribution: 'zulu'
+          server-id: github
+
+      # Build+test only — nothing depends on a plugin as a Maven library, so unlike ares-sdk/
+      # ares-core there is no intermediate package to publish here. GITHUB_TOKEN is only needed to
+      # resolve ares-sdk (and, for plugins that depend on it, ares-core) from GitHub Packages.
+      - name: Build and test
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: mvn -B -ntp test

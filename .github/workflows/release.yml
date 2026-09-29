@@ -1,0 +1,96 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "Release channel"
+        required: true
+        type: choice
+        options: [release, rc, beta, alpha]
+      base_version:
+        description: "Override MAJOR.MINOR.PATCH (blank = keep current)"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # Tags are the source of truth for "next N" per channel — no separate counter file. release
+      # has no N at all (just MAJOR.MINOR.PATCH); rc/beta/alpha each track their own count
+      # independently, resetting to 1 whenever MAJOR.MINOR.PATCH changes. plugin.json's own
+      # "version" is what publish-plugin.yml/publish_plugin.py actually read at publish time —
+      # pom.xml's <version> is bumped in lockstep purely so the built jar's own filename isn't a
+      # stale, different-looking number next to it.
+      - name: Compute release version
+        id: ver
+        run: |
+          set -euo pipefail
+          CURRENT="$(python3 -c 'import json; print(json.load(open("src/main/resources/plugin.json"))["version"])')"
+          MMP="${{ inputs.base_version }}"
+          if [ -z "$MMP" ]; then
+            MMP="$(echo "$CURRENT" | sed -E 's/-.*$//')"
+          fi
+          CHANNEL="${{ inputs.channel }}"
+          if [ "$CHANNEL" = "release" ]; then
+            VERSION="$MMP"
+            TAG="v${MMP}"
+          else
+            PREFIX="v${MMP}-${CHANNEL}"
+            LAST="$(git tag -l "${PREFIX}*" | sed -E "s/^${PREFIX}//" | sort -n | tail -1)"
+            NEXT=$(( ${LAST:-0} + 1 ))
+            VERSION="${MMP}-${CHANNEL}${NEXT}"
+            TAG="${PREFIX}${NEXT}"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Bump pom.xml + plugin.json, commit, and tag
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.ver.outputs.version }}"
+          # Range-limited to the FIRST <version> match in the whole file (the project's own,
+          # always the first one) — a plain unanchored s#...# would also clobber every
+          # dependency/plugin's own <version> sub-element (e.g. spring-boot-dependencies'
+          # <version>${spring-boot.version}</version>), which happened for real on ares-plugin-ffuf's
+          # first release (2026-09-29) and broke its build entirely.
+          sed -i -E '0,/<version>[^<]+<\/version>/s/<version>[^<]+<\/version>/<version>'"${VERSION}"'<\/version>/' pom.xml
+          python3 - "$VERSION" <<'EOF'
+          import json, sys
+          path = "src/main/resources/plugin.json"
+          manifest = json.load(open(path))
+          manifest["version"] = sys.argv[1]
+          json.dump(manifest, open(path, "w"), indent=2)
+          open(path, "a").write("\n")
+          EOF
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add pom.xml src/main/resources/plugin.json
+          # A freshly extracted repo's committed version can coincidentally already equal the
+          # first computed release version — in that case there's nothing to commit, but we still
+          # need to tag+push the current HEAD so publish-plugin.yml's tag-push trigger fires.
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: release ${{ steps.ver.outputs.tag }}"
+          else
+            echo "Already at ${VERSION} — tagging current HEAD without a new commit"
+          fi
+          git tag "${{ steps.ver.outputs.tag }}"
+          git push origin HEAD:main "${{ steps.ver.outputs.tag }}"
+
+      # The tag push above uses the default GITHUB_TOKEN, which GitHub Actions deliberately does
+      # not let trigger other workflows (anti-recursion guard) — so publish-plugin.yml's own
+      # `push: tags:` trigger never fires from this. Dispatching it explicitly via the API is a
+      # distinct, legitimate trigger that isn't subject to that restriction.
+      - name: Fire the marketplace publish workflow
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run publish-plugin.yml --ref "${{ steps.ver.outputs.tag }}"

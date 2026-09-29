@@ -1,0 +1,27 @@
+# Copy into a plugin's own repo as .github/workflows/publish-plugin.yml. This is now a thin
+# wrapper around this repo's own reusable workflow (publish-plugin-reusable.yml) — the actual
+# build+verify+publish_plugin.py logic lives once, here, not duplicated per plugin.
+#
+# `secrets: inherit` passes this repo's own secrets through to the reusable workflow — the
+# martecyber/ares-plugins repo itself never sees or holds any plugin's OVH credential.
+#
+# Fires on a version tag push (v1.2.3) so this repo's own git history is the publish log;
+# plugin.json's own `version` must match the tag (checked inside the reusable workflow) so the two
+# can never drift. Also declares workflow_dispatch directly (not just inherited from the callee)
+# so release.yml's `gh workflow run publish-plugin.yml --ref <tag>` step has something to target —
+# GitHub Actions doesn't let a GITHUB_TOKEN-authored push trigger another workflow (anti-recursion
+# guard), so the push:tags trigger above only ever fires for a third-party contributor's own manual
+# `git push --tags`, never for our own automated release.yml.
+
+name: Publish plugin
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  publish:
+    uses: martecyber/ares-plugins/.github/workflows/publish-plugin-reusable.yml@main
+    secrets: inherit

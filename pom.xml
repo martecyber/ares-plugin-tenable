@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<project
+    xmlns="http://maven.apache.org/POM/4.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd"
+>
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.martecyber.plugins</groupId>
+    <artifactId>ares-plugin-tenable</artifactId>
+    <version>1.0.0-beta1</version>
+    <packaging>jar</packaging>
+    <name>Ares ASM plugin — Tenable</name>
+    <description>
+        Tenable Vulnerability Management integration for Ares ASM — both plain "Tenable Account"
+        and "Tenable MSSP" (managed-account child-key minting) — packaged as a plugin JAR, moved
+        out of ares-core along with the rest of the built-in "data source" connectors, same shape
+        as ares-plugin-fortirecon/ares-plugin-shodan.
+    </description>
+
+    <properties>
+        <maven.compiler.release>21</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <spring-boot.version>3.5.7</spring-boot.version>
+        <!-- Must match ares-sdk's own <revision> — see that module's pom.xml. -->
+        <ares-sdk.version>1.0.0</ares-sdk.version>
+    </properties>
+
+    <repositories>
+        <repository>
+            <id>github</id>
+            <url>https://maven.pkg.github.com/martecyber/ares-sdk</url>
+        </repository>
+    </repositories>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-dependencies</artifactId>
+                <version>${spring-boot.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <!-- The plugin SDK's own extension-point interfaces/DTOs — provided, not
+             compile: resolved at runtime from ares-core's own classpath (ares-core
+             itself depends on ares-sdk). This plugin has no ares-core dependency at
+             all: it only needs the ares-sdk contract. -->
+        <dependency>
+            <groupId>com.martecyber.ares</groupId>
+            <artifactId>ares-sdk</artifactId>
+            <version>${ares-sdk.version}</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <finalName>${project.artifactId}-${project.version}</finalName>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.14.1</version>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.4.2</version>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.5.4</version>
+                <configuration>
+                    <skipTests>true</skipTests>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

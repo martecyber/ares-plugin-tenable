@@ -1,0 +1,10 @@
+{
+  "id": "tenable",
+  "version": "1.0.0-beta1",
+  "displayName": "Tenable",
+  "vendor": "Mart\u00edn Romera",
+  "license": "Proprietary",
+  "description": "Tenable Vulnerability Management: plain Tenable Account (SYNC_ASSETS/SYNC_VULNS) and Tenable MSSP (managed-account child-key minting, same actions).",
+  "sdkVersion": "1",
+  "icon": "/img/sources/tenable.svg"
+}
